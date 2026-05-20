@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bin Clearing</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f2f2f2;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .card {
+            background: white;
+            padding: 35px;
+            border-radius: 16px;
+            text-align: center;
+            width: 90%;
+            max-width: 420px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+        }
+
+        .icon { font-size: 55px; margin-bottom: 15px; }
+        h2 { margin: 10px 0; color: #1B3A6B; font-size: 22px; }
+        p { color: #555; font-size: 14px; line-height: 1.5; margin-top: 8px; }
+        .success { color: #00a650; }
+        .error { color: #d93025; }
+        .warning { color: #f4a100; }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e0e0e0;
+            border-top: 4px solid #1B3A6B;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="spinner" id="spinner"></div>
+    <div class="icon hidden" id="icon"></div>
+    <h2 id="title">Processing...</h2>
+    <p id="msg">Please wait while we update the system</p>
+</div>
+
+<script>
+    // ===== CONFIG =====
+    const FLOW2_URL = "https://default46c5178ea0f44f4d8c409598e3d118.60.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/a19743a7a01d4e559015f1759a159b2c/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=_OhzaPooayKYIOUz46-_EJNWW5pVXG9hhUAORSEKP6Q";
+
+    // ===== GET URL PARAMETERS =====
+    const params = new URLSearchParams(window.location.search);
+    const itemID = params.get("itemID");
+    const binID  = params.get("binID");
+    const responderName = params.get("name") || "Cleaner";
+
+    // ===== HELPER — UPDATE UI =====
+    function showResult(icon, title, msg, titleClass) {
+        document.getElementById("spinner").classList.add("hidden");
+        document.getElementById("icon").classList.remove("hidden");
+        document.getElementById("icon").innerText = icon;
+        document.getElementById("title").innerText = title;
+        document.getElementById("msg").innerText   = msg;
+        if (titleClass) {
+            document.getElementById("title").classList.add(titleClass);
+        }
+    }
+
+    // ===== PREVENT DOUBLE SUBMIT USING SESSIONSTORAGE =====
+    // SessionStorage resets when tab is closed
+    // but persists if same tab reloads — prevents double trigger
+    const submitKey = "cleared_" + itemID;
+
+    if (!itemID || !binID) {
+        // ===== INVALID REQUEST =====
+        showResult(
+            "❌",
+            "Invalid Request",
+            "Missing bin information. Please scan the QR code again.",
+            "error"
+        );
+
+    } else if (sessionStorage.getItem(submitKey)) {
+        // ===== ALREADY SUBMITTED IN THIS SESSION =====
+        showResult(
+            "✅",
+            "Already Cleared",
+            "Bin " + binID + " has already been marked as cleared. Thank you!",
+            "success"
+        );
+
+    } else {
+        // ===== MARK AS SUBMITTED IMMEDIATELY =====
+        sessionStorage.setItem(submitKey, "true");
+
+        // ===== CALL FLOW 2 =====
+        fetch(FLOW2_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                itemID:        itemID,
+                binID:         binID,
+                responderName: responderName,
+                clearedTime:   new Date().toISOString()
+            })
+        })
+        .then(async function(res) {
+            const text = await res.text();
+            return text ? JSON.parse(text) : {};
+        })
+        .then(function(data) {
+            // ===== CHECK IF FLOW 2 SAYS ALREADY CLOSED =====
+            if (data.status === "already_cleared") {
+                showResult(
+                    "✅",
+                    "Already Cleared",
+                    "Bin " + binID + " was already marked as cleared. Thank you!",
+                    "success"
+                );
+            } else {
+                // ===== SUCCESS =====
+                showResult(
+                    "✅",
+                    "Bin Cleared!",
+                    "Bin " + binID + " has been marked as cleared.\nThank you " + responderName + "! 🙏",
+                    "success"
+                );
+            }
+        })
+        .catch(function(err) {
+            console.error("Flow 2 error:", err);
+
+            // ===== RESET SESSION SO THEY CAN RETRY =====
+            sessionStorage.removeItem(submitKey);
+
+            showResult(
+                "⚠️",
+                "Update Failed",
+                "Could not update the system. Please try again or inform your supervisor.",
+                "error"
+            );
+        });
+    }
+</script>
+</body>
+</html>

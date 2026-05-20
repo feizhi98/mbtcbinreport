@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <title>Bin Report</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f2f2f2;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px 30px;
+            text-align: center;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+        }
+
+        .icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            color: #1B3A6B;
+            font-size: 22px;
+            margin-bottom: 16px;
+            line-height: 1.3;
+        }
+
+        p {
+            color: #555;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        .loading {
+            color: #888;
+            font-size: 15px;
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="icon" id="icon">⏳</div>
+    <h2 id="title">Processing your report...</h2>
+    <p id="message" class="loading">Please wait a moment.</p>
+</div>
+
+<script>
+    // ===== CONFIG =====
+    var POWER_AUTOMATE_URL = "https://default46c5178ea0f44f4d8c409598e3d118.60.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/e4f5c0e03a344ab3a9d64d638d8f6a79/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=vL-U5aXX0pk8IYZCfSbjLyoQT4bLuAh4tuEqFjjfeSs";
+
+    // ===== GET BIN ID FROM URL =====
+    var params = new URLSearchParams(window.location.search);
+    var binID = params.get('bin');
+
+    if (!binID) {
+        document.getElementById('icon').innerText = '❌';
+        document.getElementById('title').innerText = 'Invalid QR Code';
+        document.getElementById('message').innerText = 
+            'Please scan a valid bin QR code.';
+    } else {
+        // ===== SEND TO POWER AUTOMATE =====
+        fetch(POWER_AUTOMATE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                binID: binID,
+                reportTime: new Date().toISOString(),
+                issue: 'FULL',
+                status: 'OPEN'
+            })
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.isDuplicate === true) {
+                // Already reported
+                document.getElementById('icon').innerText = '😊';
+                document.getElementById('title').innerText = 
+                    'Thank you for informing us.';
+                document.getElementById('message').innerText = 
+                    'We have received an earlier report and our cleaners will attend to the bin shortly. Thank you for your patience 😊';
+            } else {
+                // New report created
+                document.getElementById('icon').innerText = '☺️';
+                document.getElementById('title').innerText = 
+                    'Thank you for your report!';
+                document.getElementById('message').innerText = 
+                    'Our cleaning team will clear the bin as soon as they can. We seek your patience during this period 🙏';
+            }
+        })
+        .catch(function(err) {
+            // Show success even if error
+            document.getElementById('icon').innerText = '☺️';
+            document.getElementById('title').innerText = 
+                'Thank you for your report!';
+            document.getElementById('message').innerText = 
+                'Our cleaning team has been notified. Thank you 🙏';
+        });
+    }
+</script>
+</body>
+</html>
